@@ -1,0 +1,156 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.commishguard'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Web layer
+    implementation 'io.javalin:javalin:6.3.0'
+
+    // JSON (also used by the PayPal SDK; pin explicitly for the app's own DTOs)
+    implementation 'com.google.code.gson:gson:2.11.0'
+
+    // Official APIMatic-generated PayPal Server SDK
+    implementation 'com.paypal.sdk:paypal-server-sdk:0.6.1'
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.16'
+
+    // Tests
+    testImplementation platform('org.junit:junit-bom:5.11.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'com.commishguard.App'
+    applicationName = 'commishguard'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'short'
+    }
+}
+
+// One-command PayPal Sandbox smoke test.
+// Skips itself when PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET are absent.
+tasks.register('paypalSmoke', JavaExec) {
+    group = 'verification'
+    description = 'Creates a Sandbox AUTHORIZE order and prints the approval link.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.commishguard.PayPalSmokeTest'
+    systemProperty 'java.util.logging.SimpleFormatter.format', '%4$s %3$s %5$s%n'
+}
+
+// Reproducible demo payloads for the live recording.
+// Both are ordinary ZIP/JAR files; nothing is executed by the verifier.
+tasks.register('generateDemoAssets') {
+    group = 'demo'
+    description = 'Builds demo-assets/broken-submission.jar and verified-motionblur-1.21.jar.'
+
+    def outputDir = layout.projectDirectory.dir('demo-assets')
+
+    doLast {
+        def dir = outputDir.asFile
+        dir.mkdirs()
+        long fixedTime = 1735689600000L // 2025-01-01T00:00:00Z, keeps archives reproducible.
+
+        def writeJar = { File target, Map<String, byte[]> entries ->
+            target.parentFile.mkdirs()
+            new java.util.zip.ZipOutputStream(
+                    new java.io.BufferedOutputStream(new java.io.FileOutputStream(target))).withCloseable { zip ->
+                entries.each { name, bytes ->
+                    def entry = new java.util.zip.ZipEntry(name)
+                    entry.setTime(fixedTime)
+                    zip.putNextEntry(entry)
+                    zip.write(bytes)
+                    zip.closeEntry()
+                }
+            }
+        }
+
+        def utf8 = { String text -> text.getBytes(java.nio.charset.StandardCharsets.UTF_8) }
+
+        // A header-valid class skeleton (CAFEBABE + Java 21 version). The verifier only
+        // inspects the magic/header; this fixture is never loaded or executed.
+        def classSkeleton = {
+            byte[] bytes = new byte[24]
+            bytes[0] = (byte) 0xCA
+            bytes[1] = (byte) 0xFE
+            bytes[2] = (byte) 0xBA
+            bytes[3] = (byte) 0xBE
+            bytes[7] = (byte) 65 // major version 65 = Java 21
+            bytes[9] = (byte) 1  // constant_pool_count = 1
+            bytes[11] = (byte) 0x21 // ACC_PUBLIC | ACC_SUPER
+            return bytes
+        }
+
+        def manifest = utf8(
+                'Manifest-Version: 1.0\r\n' +
+                'Created-By: CommishGuard demo fixture\r\n' +
+                '\r\n')
+
+        // Fails: no compiled classes and no fabric.mod.json.
+        writeJar(new File(dir, 'broken-submission.jar'), [
+                'META-INF/MANIFEST.MF': manifest,
+                'README.txt'          : utf8(
+                        'This is a valid JAR-shaped archive, but it contains no compiled classes\n' +
+                        'and no fabric.mod.json. CommishGuard should block it before payment.\n')
+        ])
+
+        def fabric = utf8('''{
+  "schemaVersion": 1,
+  "id": "afkzmotionblur",
+  "version": "1.2.0",
+  "name": "AFKZ Motion Blur",
+  "description": "A client-side motion blur effect for Fabric 1.21.",
+  "authors": ["CommishGuard Demo"],
+  "license": "MIT",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.21"
+  }
+}
+''')
+
+        // Passes: real fabric metadata, two header-valid classes, manifest.
+        writeJar(new File(dir, 'verified-motionblur-1.21.jar'), [
+                'META-INF/MANIFEST.MF'                       : manifest,
+                'fabric.mod.json'                            : fabric,
+                'com/afkz/motionblur/MotionBlurMod.class'    : classSkeleton(),
+                'com/afkz/motionblur/client/MotionBlurClient.class': classSkeleton(),
+                'assets/afkzmotionblur/lang/en_us.json'      : utf8('{"itemGroup.afkz":"AFKZ Motion Blur"}\n')
+        ])
+
+        logger.lifecycle("Demo assets written to ${dir}")
+    }
+}
+
+// Judges should be able to `./gradlew run` with zero global Gradle.
+tasks.named('run') {
+    standardInput = System.in
+}
+

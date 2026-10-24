@@ -1,0 +1,32 @@
+# --- Secrets (never commit the real .env) ---
+.env
+.env.local
+*.pem
+*.p12
+*.key
+
+# --- Java / Gradle ---
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# --- Runtime state ---
+storage/
+!storage/.gitkeep
+
+# --- IDE / OS ---
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+Thumbs.db
+
+# --- Node (not used, but keeps stray tooling out) ---
+node_modules/
