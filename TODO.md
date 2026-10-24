@@ -16,7 +16,7 @@
 
 **Next 3 actions:**
 1. Record the 3-minute demo video using the script and shot list in `SUBMISSION.md`.
-2. Create the public repository and replace the `<add ... URL>` placeholders in `SUBMISSION.md`.
+2. Replace the `<add YouTube/Vimeo URL>` placeholder in `SUBMISSION.md` with the published video; the public repo is live at https://github.com/MayankIsDumb/PayPal-.
 3. Add real Sandbox credentials and run `paypalSmoke` plus one real approval → capture to record the live path.
 
 **Active bugs / risks:**
