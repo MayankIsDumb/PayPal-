@@ -8,19 +8,20 @@
 
 ## Current Session State
 
-**Last updated:** 2026-10-24 (live authorize/capture handoff verified + final-capture fix)
+**Last updated:** 2026-10-26 (PDF invoice feature + live Sandbox evidence)
 
-**Status:** All five phases complete and verified. A reproducible `generateDemoAssets` task now writes two real JARs to `demo-assets/`. The full UI flow was re-run with those exact files: sample chat → validated contract → `AUTHORIZE` order → mock approval → `broken-submission.jar` blocked (4/12 checks) → `verified-motionblur-1.21.jar` verified (12/12) → capture `COMPLETED`, with no browser console errors. The live handoff was verified against SDK 0.6.1: `/api/paypal/return` calls `ordersAuthorize` (`/v2/checkout/orders/{id}/authorize`), extracts `purchase_units[].payments.authorizations[].id`, and capture uses `/v2/payments/authorizations/{id}/capture`. A real SDK default bug was fixed: `CaptureRequest` defaults `final_capture=false`, so the capture body now explicitly sends `final_capture=true` to close the hold. The return and mock-approval endpoints are idempotent on refresh. `AI_API_KEY` is now the preferred parser key (`LLM_API_KEY` remains an alias). A temporary `.env` live wiring check on port 7072 returned `paypalMode=live`, `paypalEnvironment=SANDBOX`, `llmMode=ai` and rendered the muted `Sandbox Live` pill with the model badge; the same switch was confirmed via process environment variables on port 7071. README now embeds all four screenshots, a Mermaid architecture diagram, and a 3-step judge setup for mock and live modes. `./gradlew build` is green; the main server is back in mock/fallback mode on 7070 with 3 seeded rows.
+**Status:** All five phases complete and verified. The live Sandbox path has now been exercised: the ledger contains two live `RELEASED` commissions with `COMPLETED` captures and persisted order/authorization/capture IDs. The generated `demo-assets/` flow still passes end-to-end: sample chat → validated contract → `AUTHORIZE` order → mock approval → `broken-submission.jar` blocked (4/12 checks) → `verified-motionblur-1.21.jar` verified (12/12) → capture `COMPLETED`. Added on-demand PDF invoices for `RELEASED` commissions: `GET /api/commissions/{id}/invoice`, a drawer button, OpenPDF 2.0.3 rendering, WinAnsi-safe text normalization, and `docs/invoice.png`. The invoice covers contract terms, every deterministic check, PayPal transaction IDs, and the latest six audit events; mock/sample receipts carry a visible `SANDBOX / DEMO` footer. `./gradlew build` is green (34 tests), the repo is pushed to https://github.com/MayankIsDumb/PayPal-, and the main server is restarted from the latest distribution. Health at http://localhost:7070 reports `paypalMode=live`, `paypalEnvironment=SANDBOX`, `llmMode=fallback`, and 7 ledger rows including the two live `RELEASED` captures.
 
-**Architecture in one line:** Javalin 6 REST server (Java 21) that parses deal chat into a strict `Contract` JSON, opens a PayPal Sandbox `AUTHORIZE` order, deterministically verifies uploaded `.jar`/`.zip`/`.png` deliverables in-process, then captures the authorization to release escrow funds.
+**Architecture in one line:** Javalin 6 REST server (Java 21) that parses deal chat into a strict `Contract` JSON, opens a PayPal Sandbox `AUTHORIZE` order, deterministically verifies uploaded `.jar`/`.zip`/`.png` deliverables in-process, then captures the authorization to release escrow funds and issue a PDF receipt.
 
 **Next 3 actions:**
 1. Record the 3-minute demo video using the script and shot list in `SUBMISSION.md`.
 2. Replace the `<add YouTube/Vimeo URL>` placeholder in `SUBMISSION.md` with the published video; the public repo is live at https://github.com/MayankIsDumb/PayPal-.
-3. Add real Sandbox credentials and run `paypalSmoke` plus one real approval → capture to record the live path.
+3. Add `AI_API_KEY` to `.env`, verify one live LLM parse, then restart the live-mode server for the recording.
 
 **Active bugs / risks:**
-- No real Sandbox credentials are available here, so the real PayPal redirect/approval/capture path is implemented and wiring-tested but not executed against Sandbox in this session. Mock mode is clearly labelled.
+- Live PayPal Sandbox has been exercised end-to-end, but a live LLM extraction call is still unverified because `.env` has no `AI_API_KEY`; the parser currently falls back deterministically.
+- Invoice PDFs use OpenPDF's base-14 fonts. Dynamic text is normalized to WinAnsi-safe characters; non-Latin contract text is replaced with `?` rather than risking tofu glyphs.
 - AG Grid CSS/JS load from jsDelivr; the dashboard needs network access on first load.
 - Automated screenshots use headless Chrome; the desktop Review pane can be occluded by the user's active tab.
 
@@ -31,6 +32,7 @@
 - The mock checkout page was restyled to match the editorial studio (flat warm off-black surface, serif headline, sage action) so mock-mode recordings stay visually consistent.
 - The chat panel collapses after a successful parse, with **Edit deal chat** to restore it; a funded `?funded=<id>` reload re-hydrates the contract and arms upload.
 - Ledger persists to `storage/ledger.json`; seeds are labelled `SAMPLE` and reset cleanly for first paint.
+- Invoices are generated on demand from the persisted ledger, never from request-supplied amounts, and only for `RELEASED` rows. The PDF is a receipt, not a tax document; fees are not deducted because the capture amount is the contract amount.
 
 ---
 
@@ -160,6 +162,10 @@
 - [x] `GET /api/commissions` — ledger feed for AG Grid
 - [x] `POST /api/commissions/{id}/release` — manual capture escape hatch (verified only)
 - [x] `GET /api/commissions/{id}` — full record including the verification breakdown
+- [x] `GET /api/commissions/{id}/invoice` — on-demand PDF receipt for `RELEASED` rows only
+- [x] `InvoiceService` — OpenPDF contract summary, checks, PayPal IDs, latest six audit events
+- [x] `Download Invoice PDF` action in the drawer and immediately after capture
+- [x] Invoice tests: valid `%PDF-` output, full amount, normalized audit punctuation, no replacement glyphs
 - [x] `LedgerService` with atomic JSON persistence (`storage/ledger.json`, temp-file + move)
 - [x] Commission state machine: `QUOTED → HELD → VERIFIED → RELEASED` / `FAILED` / `CANCELED`
 - [x] `index.html` split screen: left = chat + parse + dropzone, right = AG Grid ledger
@@ -171,10 +177,11 @@
 - [x] Demo mode banner in mock mode (auto-detected or `PAYPAL_MOCK=true`) — honesty with judges
 - [x] `GET /api/health` includes integration status (paypal mode, environment, llm mode, version)
 - [x] Seed script with 3 realistic commissions for first-paint demo
-- [x] README screenshots (`docs/studio.png`, `docs/contract.png`, `docs/blocked.png`, `docs/evidence.png`)
+- [x] README screenshots (`docs/studio.png`, `docs/contract.png`, `docs/blocked.png`, `docs/evidence.png`, `docs/invoice.png`)
 - [x] Mock checkout restyled to the editorial palette (flat surface, serif heading, sage action)
 - [x] Live-mode wiring check with fake credentials: health + top-bar pill + LLM badge verified
 - [x] End-to-end manual test: parse → hold → upload broken JAR → block → upload verified JAR → capture
+- [x] End-to-end invoice test: mock capture → `RELEASED` → PDF download → text extracted without font glyph loss
 
 ---
 
@@ -190,6 +197,7 @@
 - [x] AI contract parsing is load-bearing in the flow (not decorative)
 - [x] `./gradlew build --console=plain` green
 - [x] Fresh-clone test: copy repo to temp dir, `./gradlew run` with no `.env`, app boots in mock mode
+- [x] PDF receipt for completed commissions (drawer action + API)
 - [x] 3-minute video script + shot list (`SUBMISSION.md`)
 - [x] Devpost submission fields drafted (`SUBMISSION.md`)
 

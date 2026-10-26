@@ -7,6 +7,7 @@ import com.commishguard.model.Contract;
 import com.commishguard.model.VerificationResult;
 import com.commishguard.service.AiContractService;
 import com.commishguard.service.FileVerifier;
+import com.commishguard.service.InvoiceService;
 import com.commishguard.service.LedgerService;
 import com.commishguard.service.PayPalService;
 import io.javalin.Javalin;
@@ -77,6 +78,7 @@ public final class Api {
         app.get("/api/commissions/{id}", this::getCommission);
         app.post("/api/commissions/{id}/deliverable", this::uploadDeliverable);
         app.post("/api/commissions/{id}/release", this::release);
+        app.get("/api/commissions/{id}/invoice", this::downloadInvoice);
         app.post("/api/commissions/{id}/cancel", this::cancel);
 
         app.get("/api/paypal/return", this::paypalReturn);
@@ -332,6 +334,22 @@ public final class Api {
         c.addAudit("user", "commission.canceled", "Hold released where possible.");
         ledger.save(c);
         ctx.json(c);
+    }
+
+    // ------------------------------------------------------------------ invoice
+
+    private void downloadInvoice(Context ctx) {
+        Commission c = requireCommission(ctx.pathParam("id"));
+        if (c.getStatus() != CommissionStatus.RELEASED) {
+            throw new ApiError(409, "NOT_RELEASED",
+                    "Invoices are only available for commissions that have been paid out.");
+        }
+        byte[] pdf = InvoiceService.generate(c);
+        String filename = "CommishGuard-Invoice-" + c.getId() + ".pdf";
+        ctx.header("Content-Type", "application/pdf");
+        ctx.header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        ctx.header("Content-Length", String.valueOf(pdf.length));
+        ctx.result(pdf);
     }
 
     // ------------------------------------------------------------------ paypal

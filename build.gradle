@@ -26,6 +26,9 @@ dependencies {
     // Official APIMatic-generated PayPal Server SDK
     implementation 'com.paypal.sdk:paypal-server-sdk:0.6.1'
 
+    // PDF invoice generation (OpenPDF — maintained LGPL fork of iText)
+    implementation 'com.github.librepdf:openpdf:2.0.3'
+
     // Logging
     implementation 'org.slf4j:slf4j-api:2.0.16'
     runtimeOnly 'org.slf4j:slf4j-simple:2.0.16'

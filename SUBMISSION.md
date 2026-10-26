@@ -12,7 +12,7 @@ Everything needed to publish the project and record the 3-minute demo.
 
 **Track:** Build What's Next with PayPal and AI
 
-**Built with:** Java 21, Javalin 6, PayPal Server SDK 0.6.1 (Sandbox Orders v2), AG Grid Community 32.3.3, Gson 2.11, Gradle 9.8.1, OpenAI-compatible LLM API, HTML/CSS/JavaScript
+**Built with:** Java 21, Javalin 6, PayPal Server SDK 0.6.1 (Sandbox Orders v2), AG Grid Community 32.3.3, Gson 2.11, OpenPDF 2.0.3, Gradle 9.8.1, OpenAI-compatible LLM API, HTML/CSS/JavaScript
 
 **Links**
 
@@ -26,7 +26,7 @@ Digital commissions are a trust gap. Clients send money to strangers and hope th
 
 ### What it does
 
-CommishGuard AI turns a messy Discord or email negotiation into a strict contract. It opens a PayPal Sandbox order with `intent=AUTHORIZE`; after the client approves, `ordersAuthorize` places a hold rather than taking the money. When the creator uploads a `.jar`, `.zip`, or `.png`, deterministic Java code inspects the bytes, archive structure, and image dimensions. A passing file triggers capture and pays the creator; a failing file keeps the money held and shows both sides exactly which checks failed. Every state change is written to an auditable ledger shown in an AG Grid dashboard.
+CommishGuard AI turns a messy Discord or email negotiation into a strict contract. It opens a PayPal Sandbox order with `intent=AUTHORIZE`; after the client approves, `ordersAuthorize` places a hold rather than taking the money. When the creator uploads a `.jar`, `.zip`, or `.png`, deterministic Java code inspects the bytes, archive structure, and image dimensions. A passing file triggers capture and pays the creator; a failing file keeps the money held and shows both sides exactly which checks failed. Every state change is written to an auditable ledger shown in an AG Grid dashboard. Once a commission is paid out, the same ledger record can be downloaded as a two-page PDF receipt.
 
 ### How we built it
 
@@ -34,6 +34,7 @@ CommishGuard AI turns a messy Discord or email negotiation into a strict contrac
 - **Escrow:** The official PayPal Server SDK creates the `AUTHORIZE` order, sends the buyer through approval, calls `ordersAuthorize` to place the hold, and calls `authorizationsCapture` only after verification passes. Idempotency keys and a `MOCK-` fallback make the flow safe to demo.
 - **Verification:** `ZipInputStream` checks compiled `CAFEBABE` classes, `fabric.mod.json`, manifest presence, duplicate entries, traversal paths, and decompression limits. `ImageIO` checks PNG signatures, decodability, resolution, and blank/single-color canvases. Uploads are quarantined and never executed.
 - **UI:** A single-page studio with a deal desk, drag-and-drop deliverable, evidence drawer, and an AG Grid ledger with custom status and verification renderers. The ledger persists atomically to JSON.
+- **Receipts:** `InvoiceService` renders a PDF from the persisted commission with OpenPDF. It includes the contract, every verification check, PayPal order/authorization/capture IDs, and the latest audit events. Invoices exist only for `RELEASED` rows; mock and sample receipts are visibly marked.
 
 ### Challenges
 
@@ -42,8 +43,10 @@ Making the demo honest was harder than making it work. We needed a real `AUTHORI
 ### Accomplishments
 
 - End-to-end UI flow verified: sample chat → parsed contract → Sandbox order → mock approval → bad JAR blocked → good JAR verified → payment captured.
+- Live Sandbox path exercised: two separate buyer approvals produced authorization holds and `COMPLETED` captures with persisted PayPal order/authorization/capture IDs.
 - A verifier that rejects text-masquerading-as-PNG, blank canvases, zip-slip entries, zip bombs, and JARs without compiled classes.
 - A first-paint dashboard that is useful before the judge touches anything, with sample rows clearly labelled.
+- A two-page PDF receipt generated only after capture, covering the contract, every check, PayPal IDs, and the audit trail.
 - No secrets in the repo and no real money in any path.
 
 ### What we learned
@@ -72,8 +75,9 @@ LLMs are good at reading intent and bad at being an authority. The winning patte
 | 0:55–1:20 | Click **Hold funds**; drawer opens; click **Fund escrow** | "PayPal gets an order with `intent=AUTHORIZE`. The buyer approves, and `ordersAuthorize` places a hold. The money is not captured yet — that's the whole point." |
 | 1:20–1:45 | Approve in mock checkout; return; close drawer | "In mock mode this is a local approval page. With Sandbox credentials the same code drives the real PayPal checkout. The row moves to Funds held." |
 | 1:45–2:15 | Drag `broken-submission.jar`; drawer shows failed checks | "Now the creator uploads a JAR with no compiled classes and no `fabric.mod.json`. The verifier blocks it. The drawer shows every check, not a vague error. The money stays held." |
-| 2:15–2:40 | Drag `verified-motionblur-1.21.jar`; row becomes Paid out | "The real JAR has compiled bytecode, a valid manifest, and Fabric metadata with id `afkzmotionblur` version `1.2.0`. Every check passes, so the server captures the authorization. The creator gets paid." |
-| 2:40–2:55 | Open the evidence drawer; scroll the audit trail | "Order, authorization, capture, file checks, timestamps — one auditable trail. AI for ambiguity, code for truth, PayPal for the money." |
+| 2:15–2:38 | Drag `verified-motionblur-1.21.jar`; row becomes Paid out | "The real JAR has compiled bytecode, a valid manifest, and Fabric metadata with id `afkzmotionblur` version `1.2.0`. Every check passes, so the server captures the authorization. The creator gets paid." |
+| 2:38–2:50 | Open the Paid out row; click **Download Invoice PDF**; show the receipt | "The same ledger record becomes a receipt: contract terms, every check, the PayPal order, authorization, and capture IDs, plus the audit trail." |
+| 2:50–3:00 | Invoice page two / evidence trail; end card | "AI for ambiguity, code for truth, PayPal for the money. Sandbox only — no real money moves." |
 
 ### Shot list
 
@@ -85,7 +89,7 @@ LLMs are good at reading intent and bad at being an authority. The winning patte
 6. Ledger row changing from Quote to Funds held.
 7. Broken upload; close-up of the dusty-red failed checks.
 8. Verified upload; close-up of "payment captured" and Paid out.
-9. Drawer audit trail, slow scroll.
+9. Click **Download Invoice PDF**; show page one, then the evidence page.
 10. End card: repo URL + "Sandbox only. No real money moves."
 
 ---
@@ -100,6 +104,7 @@ LLMs are good at reading intent and bad at being an authority. The winning patte
 2. **Sample → Parse contract → Hold funds → Fund escrow → Approve hold.**
 3. Upload `demo-assets/broken-submission.jar`, then `demo-assets/verified-motionblur-1.21.jar`.
 4. Confirm the first is blocked and the second is released. Use `demo/aetheris-1920.png` and `demo/fake.png` for the image path.
+5. Open the released row and click **Download Invoice PDF** to verify the receipt endpoint.
 
 The top bar will show a quiet **PayPal Mock** label and the **Deterministic parser** tag. That is expected and clearly labelled. Regenerate the JARs with `./gradlew generateDemoAssets`.
 

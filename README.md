@@ -42,7 +42,7 @@ flowchart LR
 3. **Upload the deliverable.** `.jar`, `.zip`, or `.png` is inspected in a quarantine directory. It is never executed.
 4. **Release or block.** A passing verification triggers capture automatically. A failing one keeps the money held and shows every failed check.
 
-A ledger persisted to `storage/ledger.json` records each state change and provides the AG Grid dashboard.
+A ledger persisted to `storage/ledger.json` records each state change and provides the AG Grid dashboard. When a payment is captured, `InvoiceService` renders a two-page PDF receipt with the contract, verification evidence, PayPal IDs, and the latest audit events.
 
 ### See it
 
@@ -50,6 +50,12 @@ A ledger persisted to `storage/ledger.json` records each state change and provid
 |:---:|:---:|:---:|
 | ![Extracted contract](docs/contract.png) | ![Blocked deliverable](docs/blocked.png) | ![Verification evidence](docs/evidence.png) |
 | Terms extracted and validated | Missing classes stopped before money moves | Every check and PayPal event retained |
+
+### Paid-out receipt
+
+![Generated PDF invoice](docs/invoice.png)
+
+The invoice is generated from the same ledger record that drove the capture. It includes the contract terms, every deterministic check, the PayPal order/authorization/capture IDs, and the latest six audit events. Mock and sample invoices carry a visible `SANDBOX / DEMO` footer.
 
 ## Judge quick start — 3 steps
 
@@ -91,6 +97,7 @@ The app now uses `Environment.SANDBOX` and the live LLM parser. The top bar chan
 2. In mock mode, approve on the local mock checkout. In live mode, sign in with a PayPal Sandbox personal account.
 3. Drag `demo-assets/broken-submission.jar` onto the dropzone. It is blocked; open the row to see exactly which checks failed.
 4. Drag `demo-assets/verified-motionblur-1.21.jar`. All checks pass, capture fires automatically, and the row becomes **Paid out**.
+5. Open the **Paid out** row and choose **Download Invoice PDF** to see the generated receipt.
 
 Regenerate the payloads at any time with `./gradlew generateDemoAssets`. The seeded ledger ships with three clearly labelled `SAMPLE` rows so the dashboard is never empty on first paint. They are not real transactions.
 
@@ -204,6 +211,7 @@ Relevant code: [`FileVerifier.java`](src/main/java/com/commishguard/service/File
 | `GET` | `/api/commissions/{id}` | One commission with evidence |
 | `POST` | `/api/commissions/{id}/deliverable` | Multipart `file` → verify → auto-capture |
 | `POST` | `/api/commissions/{id}/release` | Manual capture, verified rows only |
+| `GET` | `/api/commissions/{id}/invoice` | Download the PDF receipt for a `RELEASED` commission |
 | `POST` | `/api/commissions/{id}/cancel` | Void authorization / cancel commission |
 | `GET` | `/api/paypal/return` | Buyer approval return URL |
 | `GET` | `/api/paypal/cancel` | Buyer cancellation return URL |
@@ -246,7 +254,7 @@ Copy `.env.example` to `.env`; it is git-ignored.
 ./gradlew generateDemoAssets         # rebuild the two video payloads
 ```
 
-Coverage includes contract validation, fallback parsing, fenced/invalid LLM output, PNG/JAR acceptance and rejection, zip-slip and zip-bomb defenses, mock PayPal lifecycle, live Sandbox mode selection, and a sandbox smoke task.
+Coverage includes contract validation, fallback parsing, fenced/invalid LLM output, PNG/JAR acceptance and rejection, zip-slip and zip-bomb defenses, mock PayPal lifecycle, live Sandbox mode selection, PDF invoice rendering with font-safe text, and a sandbox smoke task.
 
 ---
 
@@ -261,6 +269,7 @@ src/main/java/com/commishguard/
 │   ├── AiContractService.java  LLM call + deterministic fallback + validation
 │   ├── PayPalService.java      Sandbox AUTHORIZE → authorize → capture, mock mode
 │   ├── FileVerifier.java       archive / image inspection
+│   ├── InvoiceService.java     OpenPDF receipt for RELEASED commissions
 │   └── LedgerService.java      state machine + atomic JSON persistence
 └── web/Api.java                routes, multipart, error mapping
 
@@ -301,4 +310,4 @@ Architecture and failure-mode detail: [`ARCHITECTURE.md`](ARCHITECTURE.md). Exec
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE). PDF rendering uses OpenPDF 2.0.3 (LGPL/MPL); review its license before redistributing the bundled distribution.

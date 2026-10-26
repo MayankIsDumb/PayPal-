@@ -46,6 +46,7 @@ A client and a creator agree on a commission in a messy Discord/email thread. Co
 | `AiContractService` | Chat → candidate JSON → validated `Contract` | Trust LLM output |
 | `PayPalService` | Order create/capture, auth, idempotency, mock mode | Decide if work is acceptable |
 | `FileVerifier` | Deterministic artifact inspection | Call the network |
+| `InvoiceService` | `RELEASED` commission → PDF receipt with evidence | Change money state or call PayPal |
 | `LedgerService` | Commission state machine + durable JSON | Hold money |
 | `index.html` | Operator experience, AG Grid rendering | Enforce any rule |
 
@@ -218,6 +219,7 @@ record Commission(
 | `GET` | `/api/commissions` | ledger rows for AG Grid |
 | `POST` | `/api/commissions/{id}/deliverable` | multipart `file` → verify → auto-capture on pass |
 | `POST` | `/api/commissions/{id}/release` | manual capture, only if `VERIFIED` |
+| `GET` | `/api/commissions/{id}/invoice` | PDF receipt, only if `RELEASED` |
 | `POST` | `/api/commissions/{id}/cancel` | void/cancel a hold |
 | `GET` | `/api/commissions/{id}` | full record incl. checks + audit |
 | `GET` | `/api/paypal/return` | payer return landing page |
@@ -226,6 +228,10 @@ record Commission(
 | `GET` | `/api/paypal/mock-approve` | mock only: approve the hold and resume the UI |
 
 Errors are `{error, code, detail?}` with stable machine codes; stack traces stay in logs.
+
+### Invoicing
+
+Invoices are generated on demand from the persisted commission, never from request-supplied amounts, and only for `RELEASED` rows. OpenPDF 2.0.3 uses base-14 fonts, so every dynamic string passes through `pdfSafe()` (WinAnsi punctuation normalization) before layout. The two-page receipt contains the contract, deterministic checks, PayPal order/authorization/capture IDs, and the latest six audit events. Mock and sample receipts carry a visible `SANDBOX / DEMO` footer. The invoice is a receipt, not a tax document; no fee is deducted because the captured amount is the contract amount.
 
 ---
 
