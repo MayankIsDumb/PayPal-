@@ -39,12 +39,7 @@
 
 - [x] Create `TODO.md` with phase-by-phase execution plan
 - [x] Create `ARCHITECTURE.md` with system design, JSON contracts, failure modes
-- [x] Create `.opencode/command/next.md`
-- [x] Create `.opencode/command/verify.md`
-- [x] Create `.opencode/command/paypal-test.md`
-- [x] Create `.opencode/command/compact-state.md`
-- [x] Create `.opencode/agent/paypal-auditor.md`
-- [x] Create `.opencode/agent/hackathon-judge.md`
+- [x] Local OpenCode commands/agents created (kept untracked; not part of the deliverable)
 - [x] Initialize Gradle wrapper (Gradle 9.8.1, Java 21 toolchain)
 
 ---
@@ -99,7 +94,7 @@
 - [x] Unit test: amount normalization + mock create/capture round trip
 - [x] Unit test: SDK response mapping for authorization id and order-level capture id
 - [x] Unit test: credentials select live Sandbox; absent credentials stay mock
-- [x] Live-mode smoke script wired to `.opencode/command/paypal-test.md`
+- [x] Live-mode smoke script wired to the local OpenCode command (untracked)
 
 ---
 

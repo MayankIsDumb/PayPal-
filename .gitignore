@@ -29,5 +29,8 @@ storage/
 .DS_Store
 Thumbs.db
 
+# --- Local AI/agent workspace (not part of the deliverable) ---
+.opencode/
+
 # --- Node (not used, but keeps stray tooling out) ---
 node_modules/
