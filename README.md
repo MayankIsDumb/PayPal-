@@ -81,12 +81,16 @@ Open **http://localhost:7070**.
 
 **Zero-config mock — default.** Leave `.env` empty. `PAYPAL_MOCK` auto-enables, the deterministic parser runs, no AI call is made, and no real money moves. The top bar shows a quiet `PAYPAL MOCK` label.
 
-**Live Sandbox + LLM.** Add the three keys and restart:
+**Live Sandbox + LLM.** Add the three required keys and restart. For a non-OpenAI provider, also set its endpoint and model:
 
 ```bash
 PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
 AI_API_KEY=...
+
+# Gemini example (verified):
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+LLM_MODEL=gemini-3.5-flash
 ```
 
 The app now uses `Environment.SANDBOX` and the live LLM parser. The top bar changes to a muted **SANDBOX LIVE** pill, and the parser badge shows the model name. `LLM_API_KEY` remains accepted as an alias for `AI_API_KEY`; `PAYPAL_MOCK=true` still forces mock mode.

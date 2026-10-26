@@ -110,12 +110,16 @@ The top bar will show a quiet **PayPal Mock** label and the **Deterministic pars
 
 ## Live Sandbox test
 
-Add Sandbox credentials and an AI key to `.env`:
+Add Sandbox credentials and an AI key to `.env`. For a non-OpenAI provider, also set its endpoint and model:
 
 ```bash
 PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
 AI_API_KEY=...
+
+# Gemini example (verified):
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+LLM_MODEL=gemini-3.5-flash
 ```
 
 Restart. The top bar changes to a muted **Sandbox Live** pill and the parser badge shows the model name. Fund a commission, approve on PayPal, and upload a valid deliverable. The server will call `ordersAuthorize` and then `authorizationsCapture`. `./gradlew paypalSmoke` prints an approval link without touching the browser.
@@ -123,6 +127,6 @@ Restart. The top bar changes to a muted **Sandbox Live** pill and the parser bad
 ## Honesty notes for the submission
 
 - No real money moves in any configuration shipped in this repo. Sandbox is forced.
-- The demo video uses mock mode unless Sandbox credentials are shown on screen.
+- The demo video may use mock mode for reproducibility or a dedicated Sandbox account; credentials and `.env` values are never shown on screen.
 - The three seeded ledger rows are labelled `SAMPLE` and are not transactions.
 - The LLM is optional; the deterministic parser is not a fallback shown only in slides — it powers the same validated contract object.
