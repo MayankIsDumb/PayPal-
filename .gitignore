@@ -34,3 +34,7 @@ Thumbs.db
 
 # --- Node (not used, but keeps stray tooling out) ---
 node_modules/
+
+# --- Archives ---
+*.zip
+

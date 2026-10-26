@@ -18,7 +18,8 @@ Everything needed to publish the project and record the 3-minute demo.
 
 - Repository: https://github.com/MayankIsDumb/PayPal-hackathon
 - Demo video: `<add YouTube/Vimeo URL>`
-- Live demo: `<optional — localhost demo is the primary path>`
+- Live demo: https://scout-quick-treasurer-terminal.trycloudflare.com (Live Sandbox & Gemini AI armed)
+
 
 ### Inspiration
 

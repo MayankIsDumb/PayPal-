@@ -1,0 +1,12 @@
+.git
+.gradle
+build
+.env
+.opencode
+storage/ui-test
+storage/pdfbox
+storage/*.log
+storage/*.pdf
+storage/*.png
+node_modules
+commishguard-ai-submission.zip
