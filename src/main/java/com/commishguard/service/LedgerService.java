@@ -178,10 +178,11 @@ public final class LedgerService {
                 "mock", true);
         held.setStatus(CommissionStatus.HELD);
         held.setPaypalOrderId("SAMPLE-ORDER-7F2A91C4");
-        held.setPaypalStatus("CREATED");
-        held.setApprovalUrl("/api/paypal/mock-checkout?order=SAMPLE-ORDER-7F2A91C4");
+        held.setPaypalStatus("APPROVED");
+        held.setAuthorizationId("SAMPLE-AUTH-7F2A91C4");
         held.setDemo(true);
-        held.addAudit("seed", "commission.created", "Sample row — not a real PayPal order");
+        held.addAudit("seed", "commission.created", "Sample row - not a real PayPal order");
+        held.addAudit("seed", "escrow.approved", "Sample mock authorization - no real funds are held");
 
         Commission quoted = new Commission("CG-3B8D02EE",
                 new Contract("Aetheris — 4K key art", new java.math.BigDecimal("180.00"),

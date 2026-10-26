@@ -96,7 +96,7 @@ The chat is **data**, never instructions. The system prompt says so, and the cod
 ## 3. Escrow Lifecycle
 
 ```
-   chat ──parse──► QUOTED ──create order──► HELD ──verifier fails──► FAILED
+   chat ──parse──► QUOTED ──buyer approves──► HELD ──verifier fails──► FAILED
                      │                       │                        │
                      │                       │                        └──retry──┐
                      │                       │                                   │
@@ -108,6 +108,8 @@ The chat is **data**, never instructions. The system prompt says so, and the cod
                                                                               ▲
                      FAILED ────────────────────cancel───────────────────────┘
 ```
+
+A row stays `QUOTED` after `ordersCreate`; it becomes `HELD` only when the buyer approves and `ordersAuthorize` returns a persisted authorization id. Mock rows follow the same rule, so the UI never claims "Funds held" for an order that only exists in `CREATED` state.
 
 ### PayPal specifics (Sandbox only)
 

@@ -84,8 +84,12 @@ public final class Api {
 
         app.get("/api/paypal/return", this::paypalReturn);
         app.get("/api/paypal/cancel", this::paypalCancel);
-        app.get("/api/paypal/mock-checkout", this::mockCheckout);
-        app.get("/api/paypal/mock-approve", this::mockApprove);
+
+        // Mock-only routes are never registered against a live Sandbox client.
+        if (paypal.isMock()) {
+            app.get("/api/paypal/mock-checkout", this::mockCheckout);
+            app.get("/api/paypal/mock-approve", this::mockApprove);
+        }
 
         app.exception(ApiError.class,
                 (e, ctx) -> error(ctx, e.status, e.code, e.getMessage()));
@@ -176,7 +180,8 @@ public final class Api {
             c.setPaypalOrderId(order.orderId());
             c.setPaypalStatus(order.status());
             c.setApprovalUrl(order.approvalUrl());
-            c.setStatus(CommissionStatus.HELD);
+            // Stay QUOTED until the buyer approves. "Funds held" must only be
+            // shown after ordersAuthorize returns a real authorization id.
             c.addAudit("paypal", "escrow.ordered",
                     order.mode() + " order " + order.orderId() + " intent=" + order.intent()
                             + " status=" + order.status());
@@ -230,6 +235,7 @@ public final class Api {
     private void uploadDeliverable(Context ctx) {
         requireAllowed(uploadLimiter, "upload:" + ctx.ip());
         Commission c = requireCommission(ctx.pathParam("id"));
+        requireMatchingMode(c);
 
         if (c.getStatus() == CommissionStatus.RELEASED) {
             throw new ApiError(409, "ALREADY_RELEASED", "This commission is already paid out.");
@@ -292,8 +298,7 @@ public final class Api {
         c.setStatus(CommissionStatus.VERIFIED);
         c.addAudit("verifier", "deliverable.verified", result.summary());
 
-        boolean funded = paypal.isMock()
-                || (c.getAuthorizationId() != null && !c.getAuthorizationId().isBlank());
+        boolean funded = c.getAuthorizationId() != null && !c.getAuthorizationId().isBlank();
         if (funded) {
             captureError = tryAutoCapture(c);
         } else {
@@ -313,6 +318,7 @@ public final class Api {
 
     private void release(Context ctx) {
         Commission c = requireCommission(ctx.pathParam("id"));
+        requireMatchingMode(c);
         if (c.getStatus() == CommissionStatus.RELEASED) {
             ctx.json(c);
             return;
@@ -322,8 +328,7 @@ public final class Api {
             throw new ApiError(409, "NOT_VERIFIED",
                     "Only a commission with a passing verification can be released.");
         }
-        boolean funded = paypal.isMock()
-                || (c.getAuthorizationId() != null && !c.getAuthorizationId().isBlank());
+        boolean funded = c.getAuthorizationId() != null && !c.getAuthorizationId().isBlank();
         if (!funded) {
             throw new ApiError(409, "NOT_FUNDED",
                     "The buyer has not approved the PayPal order yet, so there is nothing to capture.");
@@ -338,8 +343,13 @@ public final class Api {
 
     private void cancel(Context ctx) {
         Commission c = requireCommission(ctx.pathParam("id"));
+        requireMatchingMode(c);
         if (c.getStatus() == CommissionStatus.RELEASED) {
             throw new ApiError(409, "ALREADY_RELEASED", "Captured payments cannot be canceled here.");
+        }
+        if (c.getStatus() == CommissionStatus.CANCELED) {
+            ctx.json(c);
+            return;
         }
         paypal.voidAuthorization(c.getAuthorizationId());
         c.setStatus(CommissionStatus.CANCELED);
@@ -379,6 +389,16 @@ public final class Api {
         }
         Commission c = found.get();
 
+        if (!matchesServerMode(c)) {
+            ctx.redirect("/?paypal=mode");
+            return;
+        }
+        if (c.getStatus() == CommissionStatus.RELEASED
+                || c.getStatus() == CommissionStatus.CANCELED) {
+            ctx.redirect("/?paypal=inactive&id=" + c.getId());
+            return;
+        }
+
         // PayPal may hit the return URL more than once (refresh, back button, retry).
         // Never authorize the same order twice; resume from the persisted hold instead.
         if (c.getAuthorizationId() != null && !c.getAuthorizationId().isBlank()) {
@@ -417,20 +437,31 @@ public final class Api {
 
     private void paypalCancel(Context ctx) {
         String token = ctx.queryParam("token");
-        ledger.findByOrderId(token).ifPresent(c -> {
-            if (c.getStatus() != CommissionStatus.RELEASED) {
+        String result = "canceled";
+        Optional<Commission> found = ledger.findByOrderId(token);
+        if (found.isPresent()) {
+            Commission c = found.get();
+            if (!matchesServerMode(c)) {
+                result = "mode";
+            } else if (c.getStatus() != CommissionStatus.RELEASED
+                    && c.getStatus() != CommissionStatus.CANCELED) {
+                paypal.voidAuthorization(c.getAuthorizationId());
                 c.setStatus(CommissionStatus.CANCELED);
                 c.addAudit("buyer", "escrow.canceled", "Buyer canceled on PayPal.");
                 ledger.save(c);
             }
-        });
-        ctx.redirect("/?paypal=canceled");
+        }
+        ctx.redirect("/?paypal=" + result);
     }
 
     private void mockCheckout(Context ctx) {
         String order = ctx.queryParam("order");
         if (order == null || order.isBlank()) {
             throw new ApiError(400, "NO_ORDER", "Missing mock order id.");
+        }
+        if (ledger.findByOrderId(order).filter(c -> c.isMode("mock")).isEmpty()) {
+            throw new ApiError(404, "MOCK_ORDER_NOT_FOUND",
+                    "No mock order with that id exists in this ledger.");
         }
         String safe = escape(order);
         String page = """
@@ -492,6 +523,15 @@ public final class Api {
     private void mockApprove(Context ctx) {
         String order = ctx.queryParam("order");
         ledger.findByOrderId(order).ifPresentOrElse(c -> {
+            if (!c.isMode("mock")) {
+                ctx.redirect("/?paypal=mode");
+                return;
+            }
+            if (c.getStatus() == CommissionStatus.RELEASED
+                    || c.getStatus() == CommissionStatus.CANCELED) {
+                ctx.redirect("/?paypal=inactive&id=" + c.getId());
+                return;
+            }
             if (c.getAuthorizationId() == null || c.getAuthorizationId().isBlank()) {
                 markFunded(c, "MOCK-AUTH-" + UUID.randomUUID().toString()
                         .replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT), "mock approval");
@@ -506,6 +546,12 @@ public final class Api {
     }
 
     private void markFunded(Commission c, String authorizationId, String source) {
+        requireMatchingMode(c);
+        if (c.getStatus() == CommissionStatus.RELEASED
+                || c.getStatus() == CommissionStatus.CANCELED) {
+            throw new ApiError(409, "INACTIVE",
+                    "This commission is no longer awaiting buyer approval.");
+        }
         c.setAuthorizationId(authorizationId);
         c.setPaypalStatus("APPROVED");
         if (c.getStatus() == CommissionStatus.QUOTED) {
@@ -539,6 +585,21 @@ public final class Api {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private boolean matchesServerMode(Commission c) {
+        return c.isMode(paypal.isMock() ? "mock" : "live");
+    }
+
+    private void requireMatchingMode(Commission c) {
+        if (matchesServerMode(c)) {
+            return;
+        }
+        String actual = c.getMode() == null || c.getMode().isBlank() ? "unknown" : c.getMode();
+        String expected = paypal.isMock() ? "mock" : "live";
+        throw new ApiError(409, "MODE_MISMATCH",
+                "This commission was created in " + actual + " mode, but the server is running in "
+                        + expected + " mode. Restart with matching PayPal credentials before changing it.");
+    }
 
     private Commission requireCommission(String id) {
         return ledger.get(id).orElseThrow(() ->

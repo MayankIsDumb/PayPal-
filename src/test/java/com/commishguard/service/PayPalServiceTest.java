@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PayPalServiceTest {
@@ -64,6 +65,41 @@ class PayPalServiceTest {
         assertTrue(capture.captureId().startsWith("MOCK-CAP-"));
         assertEquals("COMPLETED", capture.status());
         assertEquals("mock", capture.mode());
+    }
+
+    @Test
+    void mockCaptureRequiresABuyerAuthorization() {
+        PayPalService paypal = new PayPalService(
+                EnvConfig.of(tmp, Map.of("PAYPAL_MOCK", "true")));
+        Commission c = commission();
+
+        PayPalService.PayPalException error = assertThrows(
+                PayPalService.PayPalException.class, () -> paypal.captureEscrowOrder(c));
+
+        assertEquals("PAYPAL_NOT_APPROVED", error.code());
+    }
+
+    @Test
+    void captureRefusesToCrossTheMockLiveBoundary() {
+        PayPalService mock = new PayPalService(
+                EnvConfig.of(tmp, Map.of("PAYPAL_MOCK", "true")));
+        Commission liveRow = new Commission("CG-LIVE0001", commission().getContract(),
+                "budget $240", "live", false);
+        liveRow.setAuthorizationId("AUTH-LIVE-1");
+
+        PayPalService.PayPalException mockError = assertThrows(
+                PayPalService.PayPalException.class, () -> mock.captureEscrowOrder(liveRow));
+        assertEquals("PAYPAL_MODE_MISMATCH", mockError.code());
+
+        PayPalService live = new PayPalService(EnvConfig.of(tmp, Map.of(
+                "PAYPAL_CLIENT_ID", "sandbox-client-id",
+                "PAYPAL_CLIENT_SECRET", "sandbox-client-secret")));
+        Commission mockRow = commission();
+        mockRow.setAuthorizationId("MOCK-AUTH-1");
+
+        PayPalService.PayPalException liveError = assertThrows(
+                PayPalService.PayPalException.class, () -> live.captureEscrowOrder(mockRow));
+        assertEquals("PAYPAL_MODE_MISMATCH", liveError.code());
     }
 
     @Test

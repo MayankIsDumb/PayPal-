@@ -81,6 +81,11 @@ public final class Commission {
         this.mode = mode;
     }
 
+    /** True when this row was created by the same PayPal mode as the running server. */
+    public boolean isMode(String expected) {
+        return expected != null && expected.equalsIgnoreCase(mode);
+    }
+
     public boolean isDemo() {
         return demo;
     }

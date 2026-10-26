@@ -201,7 +201,8 @@ public final class PayPalService {
 
     /**
      * Called after the payer approves. Creates the authorization (the actual hold).
-     * Without payer approval PayPal returns an error and the row stays HELD-unfunded.
+     * Without payer approval PayPal returns an error; the row stays QUOTED and no
+     * authorization id is persisted, so it cannot masquerade as funded.
      */
     public EscrowAuthorization authorizeEscrowOrder(String orderId, String commissionId) {
         if (isMock()) {
@@ -239,9 +240,22 @@ public final class PayPalService {
      * falls back to order-level capture for flows where PayPal performed authorization inline.
      */
     public EscrowCapture captureEscrowOrder(Commission commission) {
+        String expected = isMock() ? "mock" : "live";
+        if (!commission.isMode(expected)) {
+            String actual = commission.getMode() == null || commission.getMode().isBlank()
+                    ? "unknown" : commission.getMode();
+            throw new PayPalException("PAYPAL_MODE_MISMATCH",
+                    "This commission belongs to " + actual + " mode and cannot be captured by the "
+                            + expected + " PayPal client.");
+        }
         if (isMock()) {
+            String mockAuthId = commission.getAuthorizationId();
+            if (mockAuthId == null || mockAuthId.isBlank()) {
+                throw new PayPalException("PAYPAL_NOT_APPROVED",
+                        "Buyer approval is required before capture; no mock authorization is held.");
+            }
             return new EscrowCapture("MOCK-CAP-" + shortId(), "COMPLETED",
-                    commission.getAuthorizationId(), "mock");
+                    mockAuthId, "mock");
         }
         String authId = commission.getAuthorizationId();
         if (authId != null && !authId.isBlank()) {
