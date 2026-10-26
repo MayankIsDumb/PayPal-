@@ -68,6 +68,7 @@ public final class Api {
 
         app.get("/", this::index);
         app.get("/index.html", this::index);
+        app.get("/favicon.ico", this::favicon);
 
         app.get("/api/health", this::health);
 
@@ -107,6 +108,17 @@ public final class Api {
     private void index(Context ctx) {
         ctx.header("Content-Type", "text/html; charset=utf-8");
         ctx.result(indexHtml);
+    }
+
+    private void favicon(Context ctx) {
+        ctx.header("Content-Type", "image/svg+xml");
+        ctx.header("Cache-Control", "public, max-age=86400");
+        ctx.result("""
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path d="M12 2.5l7.5 3v6.2c0 4.6-3.1 8.3-7.5 9.8-4.4-1.5-7.5-5.2-7.5-9.8V5.5l7.5-3z" fill="#0a0b0b" stroke="#c8d5c0" stroke-width="1.5"/>
+                  <path d="M8.6 12.2l2.3 2.3 4.6-4.7" stroke="#c8d5c0" stroke-width="1.8" fill="none"/>
+                </svg>
+                """);
     }
 
     private void health(Context ctx) {
